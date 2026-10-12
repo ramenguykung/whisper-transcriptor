@@ -1,0 +1,12 @@
+ARG GPU_IMAGE=ghcr.io/opennmt/ctranslate2:4.8.2-ubuntu22.04-cuda12.8@sha256:05de165cfa7ecfdb6da8aa9c452af0f891cbd8cfaccbc472a375a21efa5f126b
+FROM ${GPU_IMAGE}
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HF_HUB_DISABLE_TELEMETRY=1 MODEL_CACHE_DIR=/data/models
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements.gpu.lock /app/requirements.lock
+RUN python3 -m pip install --no-cache-dir --require-hashes -r requirements.lock
+ENV HF_HOME=/data/models/huggingface HF_XET_CACHE=/data/models/xet
+RUN mkdir -p /data/media /data/models && chown -R 10001:10001 /data
+COPY . /app/worker
+USER 10001:10001
+ENTRYPOINT ["python3", "-m", "worker.supervisor"]
