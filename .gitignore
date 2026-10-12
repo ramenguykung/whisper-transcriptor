@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 .pytest_cache/
+.test-tmp*/
 *.pyc
 node_modules/
 dist/

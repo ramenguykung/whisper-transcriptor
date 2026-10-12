@@ -1,0 +1,56 @@
+name: whisper-transcriptor
+services:
+  web:
+    build: ./web
+    image: whisper-transcriptor-web:local
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+  api:
+    build: ./api
+    image: whisper-transcriptor-api:local
+    environment:
+      API_DATA_DIR: /data/db
+      MEDIA_DIR: /data/media
+      WORKER_TOKEN: ${WORKER_TOKEN:?Run python scripts/setup.py first}
+      MAX_UPLOAD_BYTES: "2000000000"
+      MAX_DURATION_SECONDS: "7200"
+    volumes:
+      - database:/data/db
+      - media:/data/media
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/system', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+  worker:
+    build: ./worker
+    image: whisper-transcriptor-worker:local
+    environment:
+      API_URL: http://api:8000
+      WORKER_TOKEN: ${WORKER_TOKEN:?Run python scripts/setup.py first}
+      MEDIA_DIR: /data/media
+      MODEL_CACHE_DIR: /data/models
+      MAX_DURATION_SECONDS: "7200"
+      WORKER_MODE: real
+    volumes:
+      - media:/data/media
+      - models:/data/models
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  database:
+  media:
+  models:

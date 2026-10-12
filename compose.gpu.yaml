@@ -1,0 +1,7 @@
+services:
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile.gpu
+    image: whisper-transcriptor-worker-gpu:local
+    gpus: all

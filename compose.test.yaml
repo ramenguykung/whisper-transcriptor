@@ -1,0 +1,5 @@
+# Isolated deterministic integration tests. Never use this for real transcription.
+services:
+  worker:
+    environment:
+      WORKER_MODE: fixture
