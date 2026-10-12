@@ -1,0 +1,5 @@
+{
+  "base": {"repository": "Systran/faster-whisper-base", "revision": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66"},
+  "small": {"repository": "Systran/faster-whisper-small", "revision": "536b0662742c02347bc0e980a01041f333bce120"},
+  "medium": {"repository": "Systran/faster-whisper-medium", "revision": "08e178d48790749d25932bbc082711ddcfdfbc4f"}
+}
