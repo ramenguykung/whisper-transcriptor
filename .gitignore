@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+node_modules/
+dist/
+.env
+.local/
+test-results/
+playwright-report/
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/build/
+*.log
