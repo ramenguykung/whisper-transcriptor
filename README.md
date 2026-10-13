@@ -25,6 +25,8 @@ The GPU worker replaces the CPU worker. The GTX 1060 uses `int8_float32`; CPU us
 
 Click a caption to seek. Follow keeps the active caption visible. Edit text and start/end times or drag timeline boundaries. Split uses the text cursor and playhead inside the selected caption. Merge joins consecutive selected captions with a newline. Overlapping captions are allowed. Undo and Redo change the current document; autosave preserves revisions.
 
+Video previews are capped at 1280 pixels on the longest edge and 30 fps. HDR video is tone mapped to SDR BT.709 for consistent playback. Originals and transcription audio keep their quality. Older previews keep their previous format; upload the recording again to regenerate them. Reload playback recovers a player error without discarding transcript edits.
+
 Pending edits are stored in this browser. Export waits for a save. A revision conflict preserves the local draft and offers Reload or Download draft. Delete removes the original and derived files after processing stops. Completed jobs remain until you delete them.
 
 Each recording opens for editing in one tab at a time. Close that editor before opening it in another tab, then use Reload. Editing requires a current browser with Web Locks support on localhost.

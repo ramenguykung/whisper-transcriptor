@@ -1,6 +1,7 @@
 """Stream media preparation without loading a recording into browser memory."""
 
 from array import array
+from fractions import Fraction
 import json
 import math
 import os
@@ -14,6 +15,7 @@ MAX_BYTES = 2_000_000_000
 MAX_SECONDS = 7200
 SAMPLE_RATE = 16000
 FORMATS = "wav,mp3,flac,mov,ogg,matroska,webm,avi,aac"
+HDR_TRANSFERS = ("arib-std-b67", "smpte2084")
 
 
 class WorkerError(Exception):
@@ -97,9 +99,16 @@ def compatible_preview(source, info):
     if source.suffix.lower() == ".wav" and video is None:
         return audio.get("codec_name") == "pcm_s16le" and audio.get("sample_rate") == "16000" and audio.get("channels") == 1
     if source.suffix.lower() == ".mp4" and video is not None:
+        try:
+            rates = [Fraction(video[key]) for key in ("r_frame_rate", "avg_frame_rate")]
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
+            return False
         return (video.get("codec_name") == "h264" and video.get("pix_fmt") == "yuv420p"
                 and video.get("codec_tag_string") == "avc1" and audio.get("codec_name") == "aac"
-                and audio.get("profile") == "LC" and audio.get("channels") in (1, 2))
+                and audio.get("profile") == "LC" and audio.get("channels") in (1, 2)
+                and video.get("color_transfer") not in HDR_TRANSFERS
+                and all(0 < video.get(key, 0) <= 1280 and video[key] % 2 == 0 for key in ("width", "height"))
+                and all(0 < rate <= 30 for rate in rates))
     return False
 
 
@@ -147,15 +156,48 @@ def prepare(source, attempt_dir, emit):
             shutil.copyfile(source, preview_path)
     elif info["has_video"]:
         preview_path = attempt_dir / "preview.mp4"
-        video_filter = ("setpts=PTS-STARTPTS,format=rgb24,"
+        video = info["video_stream"]
+        hdr = video.get("color_transfer") in HDR_TRANSFERS
+        scale_factor = "min(1\\,1280/max(iw\\,ih))"
+        preview_width = f"max(2\\,trunc(iw*{scale_factor}/2)*2)"
+        preview_height = f"max(2\\,trunc(ih*{scale_factor}/2)*2)"
+        color_filter = "format=rgb24"
+        output_filter = "format=yuv420p"
+        color_args = []
+        if hdr:
+            peak = 10 if video["color_transfer"] == "arib-std-b67" else 100
+            if video["color_transfer"] == "smpte2084":
+                # Use one peak for the clip so frame metadata cannot change preview brightness.
+                for item in video.get("side_data_list", []):
+                    try:
+                        nits = float(Fraction(item.get("max_content") or item.get("max_luminance")))
+                    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+                        continue
+                    if 0 < nits <= 10000:
+                        peak = max(1, nits / 100)
+                        if item.get("max_content"):
+                            break
+            color_filter = (f"zscale=w={preview_width}:h={preview_height}:t=linear:npl=100,"
+                            "format=gbrpf32le,zscale=p=bt709,"
+                            f"tonemap=hable:peak={peak}:desat=0,"
+                            "zscale=t=bt709:m=gbr:r=full,format=gbrp,"
+                            "sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA,"
+                            "sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL,"
+                            "sidedata=mode=delete:type=DYNAMIC_HDR_PLUS")
+            output_filter = ("zscale=pin=bt709:tin=bt709:min=gbr:rin=full:"
+                             "p=bt709:t=bt709:m=bt709:r=limited:d=error_diffusion,format=yuv420p,"
+                             "setparams=range=limited:colorspace=bt709:color_trc=bt709:color_primaries=bt709")
+            color_args = ["-color_range", "tv", "-colorspace", "bt709", "-color_trc", "bt709",
+                          "-color_primaries", "bt709"]
+        video_filter = (f"setpts=PTS-STARTPTS,{color_filter},"
                         f"tpad=color=black:start_duration={info['video_offset_ms'] / 1000:.6f}:start_mode=add:"
                         f"stop_mode=clone:stop_duration={seconds:.6f},"
                         f"trim=duration={duration_ms / 1000:.6f},setpts=PTS-STARTPTS,"
-                        "scale=max(2\\,trunc(iw/2)*2):max(2\\,trunc(ih/2)*2),format=yuv420p")
+                        f"scale={preview_width}:{preview_height},{output_filter}")
         run_command(prefix + input_args + ["-i", str(audio_path), "-map", f"0:{info['video_index']}",
                     "-map", "1:a:0", "-vf", video_filter, "-c:v", "libx264", "-preset", "veryfast",
-                    "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
-                    "-movflags", "+faststart", "-t", f"{duration_ms / 1000:.6f}", str(preview_path)])
+                    "-crf", "23", "-pix_fmt", "yuv420p", "-fpsmax", "30", "-c:a", "aac", "-b:a", "128k",
+                    "-movflags", "+faststart", "-t", f"{duration_ms / 1000:.6f}"] + color_args + [str(preview_path)])
     else:
         preview_path = attempt_dir / "preview.mp3"
         run_command(prefix + ["-i", str(audio_path), "-map", "0:a:0", "-c:a", "libmp3lame",
