@@ -56,11 +56,12 @@ export default function SegmentList(props: Props) {
   const [window, setWindow] = useState({ top: 0, height: 500 })
   const activeIndex = props.segments.findIndex(segment => segment.start_ms <= props.currentMs && segment.end_ms > props.currentMs)
   useEffect(() => {
-    const element = container.current!
+    const element = container.current
+    if (!element) return
     const observer = new ResizeObserver(() => setWindow(value => ({ ...value, height: element.clientHeight })))
     observer.observe(element)
     return () => observer.disconnect()
-  }, [])
+  }, [props.segments.length > 0])
   useEffect(() => {
     if (!props.follow || activeIndex < 0 || document.activeElement?.closest('.segment-row')) return
     const element = container.current!
@@ -73,7 +74,10 @@ export default function SegmentList(props: Props) {
   const last = Math.min(props.segments.length, Math.ceil((window.top + window.height) / ROW_HEIGHT) + 3)
   if (!props.segments.length) return <div className="transcript-empty">No speech found. Export the empty transcript or try another model.</div>
   return <div className="segment-list" ref={container} tabIndex={0} aria-label="Transcript segments"
-    onScroll={event => setWindow(value => ({ ...value, top: event.currentTarget.scrollTop }))}>
+    onScroll={event => {
+      const top = event.currentTarget.scrollTop
+      setWindow(value => ({ ...value, top }))
+    }}>
     <div className="segment-spacer" style={{ height: props.segments.length * ROW_HEIGHT }}>
       {props.segments.slice(first, last).map((segment, offset) => <SegmentRow key={segment.id} {...props}
         segment={segment} index={first + offset} active={segment.start_ms <= props.currentMs && segment.end_ms > props.currentMs}

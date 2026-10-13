@@ -61,6 +61,7 @@ function Editor({ job, transcript, waveform, draft, warning, reload, registerFlu
   const [selected, setSelected] = useState<string[]>([])
   const [cursor, setCursor] = useState({ id: '', position: 0 })
   const [notice, setNotice] = useState('')
+  const [playbackError, setPlaybackError] = useState(false)
   const [exportFormat, setExportFormat] = useState('srt')
   const [exporting, setExporting] = useState(false)
   const [confirmReload, setConfirmReload] = useState(false)
@@ -74,7 +75,7 @@ function Editor({ job, transcript, waveform, draft, warning, reload, registerFlu
     window.addEventListener('beforeunload', unload)
     return () => { mounted.current = false; queue.dispose(); registerFlush(null); window.removeEventListener('beforeunload', unload) }
   }, [queue, registerFlush])
-  useEffect(() => { if (media) media.playbackRate = rate }, [media, rate])
+  useEffect(() => { if (media) { media.defaultPlaybackRate = rate; media.playbackRate = rate } }, [media, rate])
 
   function apply(action: Parameters<typeof editReducer>[1]) {
     const next = editReducer(historyRef.current, action)
@@ -155,6 +156,7 @@ function Editor({ job, transcript, waveform, draft, warning, reload, registerFlu
         <button onClick={() => void discardAndReload()}>Discard and reload</button><button onClick={() => setConfirmReload(false)}>Keep draft</button></div>}
     </div>}
     {notice && <div className="notice" role="alert">{notice}<button className="small-button" onClick={() => setNotice('')}>Dismiss</button></div>}
+    {playbackError && <div className="notice" role="alert">Playback failed.<button className="small-button" onClick={() => media?.load()}>Reload playback</button></div>}
     <div className="workspace-grid">
       <section className="playback-panel" aria-label="Playback">
         <div className="panel-label"><h2>Playback</h2><span>{job.has_video ? 'Video' : 'Audio'}</span></div>
@@ -164,11 +166,11 @@ function Editor({ job, transcript, waveform, draft, warning, reload, registerFlu
             ? <video ref={setMedia} src={`/api/jobs/${job.id}/media`} controls preload="metadata" playsInline
               onTimeUpdate={event => setTime(Math.round(event.currentTarget.currentTime * 1000))}
               onSeeked={event => setTime(Math.round(event.currentTarget.currentTime * 1000))}
-              onError={() => setNotice('Playback failed. Check the job details or retry transcription.')} />
+              onError={() => setPlaybackError(true)} onLoadedData={() => setPlaybackError(false)} />
             : <audio ref={setMedia} src={`/api/jobs/${job.id}/media`} controls preload="metadata"
               onTimeUpdate={event => setTime(Math.round(event.currentTarget.currentTime * 1000))}
               onSeeked={event => setTime(Math.round(event.currentTarget.currentTime * 1000))}
-              onError={() => setNotice('Playback failed. Check the job details or retry transcription.')} />}
+              onError={() => setPlaybackError(true)} onLoadedData={() => setPlaybackError(false)} />}
         </div>
         <div className="playback-controls"><label>Speed <select value={rate} onChange={event => setRate(Number(event.target.value))}>
           {[0.5, 0.75, 1, 1.25, 1.5, 2].map(value => <option key={value} value={value}>{value}x</option>)}</select></label>

@@ -57,6 +57,8 @@ export default function Waveform(props: Props) {
       }
     })
     instance.on('error', failure => { if (!disposed) setError(failure.message) })
+    const clearError = () => { if (!disposed) setError('') }
+    props.media.addEventListener('loadeddata', clearError)
     plugin.on('region-clicked', (region, event) => {
       event.stopPropagation()
       latest.current.onSelect(region.id, event.shiftKey)
@@ -72,7 +74,7 @@ export default function Waveform(props: Props) {
         if (original) region.setOptions({ start: original.start_ms / 1000, end: original.end_ms / 1000 })
       }
     })
-    return () => { disposed = true; observer.disconnect(); instance.destroy(); wave.current = null; regions.current = null }
+    return () => { disposed = true; props.media.removeEventListener('loadeddata', clearError); observer.disconnect(); instance.destroy(); wave.current = null; regions.current = null }
   }, [props.media, props.data, duration])
 
   const allVisible = props.segments.filter(segment => segment.end_ms >= visible[0] * 1000 && segment.start_ms <= visible[1] * 1000)
